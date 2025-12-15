@@ -7,28 +7,12 @@ from dotenv import load_dotenv
 
 # ----------------- Database Connection Functions -----------------
 # 1️⃣ Create a connection function
-def create_connection():
-    """Create a database connection and return the connection object."""
-    load_dotenv()
-    host = os.getenv("DB_HOST")
-    user = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
-    database = os.getenv("DB_NAME")
+from utils.db_connection import create_connection
 
-    conn = None
-    try:
-        conn = mysql.connector.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=database,
-            force_ipv6=False  # Force TCP/IP on Windows to avoid named pipe errors
-        )
-        if conn.is_connected():
-            return conn
-    except Error as e:
-        st.error(f"❌ Error connecting to MySQL database: {e}")
-        return None
+# ----------------- Database Connection Functions -----------------
+# 1️⃣ Create a connection function
+# Using the robust create_connection from utils which avoids named pipe issues
+
 
 # 2️⃣ Function to run a query and return as DataFrame
 def run_query(conn, query):
@@ -589,7 +573,13 @@ def app():
 
     st.info("💡 Note: This page connects to a MySQL database to run the queries. Make sure your database is running and the connection details are correct.")
 
-    conn = create_connection()
+    load_dotenv()
+    host = os.getenv("DB_HOST")
+    user = os.getenv("DB_USER")
+    password = os.getenv("DB_PASSWORD")
+    database = os.getenv("DB_NAME")
+
+    conn = create_connection(host, user, password, database)
     if conn is None:
         st.warning("Could not connect to the database. Please check your credentials and connection.")
         return

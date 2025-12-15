@@ -3,15 +3,32 @@ from mysql.connector import Error
 import pandas as pd
 
 
-def create_connection(host, user, passwd, database=None):
-    """Create a new MySQL connection. Don't cache connections across reruns."""
-    return mysql.connector.connect(
-        host=host,
-        user=user,
-        password=passwd,
-        database=database,
-        autocommit=True,
-    )
+def create_connection(host, user, passwd, database=None, port=None):
+    """Create a new MySQL connection. Don't cache connections across reruns.
+
+    If `host` is empty or the Windows named-pipe shorthand ("."), prefer TCP
+    by using the loopback address `127.0.0.1`. An optional `port` can be
+    provided (defaults to server's configured port, typically 3306).
+    """
+    # On Windows a host value of '.' attempts a named-pipe connection which
+    # may fail with: "Can't open named pipe to host: . pipe: MySQL (2)".
+    if host in (None, "", "."):
+        host = "127.0.0.1"
+
+    connect_kwargs = {
+        "host": host,
+        "user": user,
+        "password": passwd,
+        "database": database,
+        "autocommit": True,
+    }
+    if port:
+        try:
+            connect_kwargs["port"] = int(port)
+        except Exception:
+            pass
+
+    return mysql.connector.connect(**{k: v for k, v in connect_kwargs.items() if v is not None})
 
 
 def get_mysql_schema(host, user, passwd):
