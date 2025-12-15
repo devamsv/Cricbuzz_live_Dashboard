@@ -87,95 +87,119 @@ def app():
             
             # Search input
             search_name = st.text_input("Enter player name:", placeholder="e.g., Dhoni,Raina,Kohli")
-            
-            if st.button("🔎 Search", type="primary") and search_name:
+
+            # Initialize session state containers for persistence
+            if 'last_search_players' not in st.session_state:
+                st.session_state['last_search_players'] = None
+            if 'last_search_term' not in st.session_state:
+                st.session_state['last_search_term'] = ''
+            if 'last_selected_idx' not in st.session_state:
+                st.session_state['last_selected_idx'] = 0
+
+            # Perform search when button pressed
+            if st.button("🔎 Search") and search_name:
                 with st.spinner("Searching..."):
                     player_data = search_player_api(search_name)
-                
+
                 if player_data and "player" in player_data:
                     players = player_data["player"]
-                    
-                    if len(players) == 0:
-                        st.warning(f"No players found for '{search_name}'")
-                    else:
-                        st.success(f"✅ Found {len(players)} player(s)")
-                        
-                        # Let user select if multiple results
-                        if len(players) > 1:
-                            player_names = [f"{p.get('name', 'Unknown')} ({p.get('teamName', 'N/A')})" for p in players]
-                            selected_idx = st.selectbox("Select a player:", range(len(player_names)), format_func=lambda x: player_names[x])
-                            selected_player = players[selected_idx]
-                        else:
-                            selected_player = players[0]
-                        
-                        # Get detailed info
-                        player_id = selected_player.get("id")
-                        player_details = get_player_details(player_id)
-                        
-                        if player_details:
-                            # Display player profile
-                            st.markdown("---")
-                            col1, col2 = st.columns([1, 2])
-                            
-                            with col1:
-                                # Try to show player image
-                                if "faceImageId" in selected_player and selected_player["faceImageId"]:
-                                    img_url = f"https://www.cricbuzz.com/a/img/v1/152x152/i1/c{selected_player['faceImageId']}.jpg"
-                                    st.image(img_url, width=150)
-                                else:
-                                    st.info("No image available")
-                            
-                            with col2:
-                                st.subheader(f"👤 {selected_player.get('name', 'Unknown')}")
-                                st.caption(f"Team: {selected_player.get('teamName', 'N/A')}")
-                                
-                                if "dob" in selected_player:
-                                    st.write(f"📅 Born: {selected_player['dob']}")
-                            
-                            # Player details in expandable sections
-                            with st.expander("📋 Profile Information", expanded=True):
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.write(f"**Role:** {player_details.get('role', 'N/A')}")
-                                    st.write(f"**Batting Style:** {player_details.get('bat', 'N/A')}")
-                                    st.write(f"**Bowling Style:** {player_details.get('bowl', 'N/A')}")
-                                with col2:
-                                    st.write(f"**Birth Place:** {player_details.get('birthPlace', 'N/A')}")
-                                    st.write(f"**Teams:** {player_details.get('teams', 'N/A')}")
-                            
-                            # ICC Rankings
-                            if "rankings" in player_details and player_details["rankings"]:
-                                with st.expander("🏆 ICC Rankings"):
-                                    rankings = player_details["rankings"]
-                                    col1, col2, col3 = st.columns(3)
-                                    
-                                    with col1:
-                                        st.markdown("**Batting**")
-                                        if "bat" in rankings:
-                                            for format_type, rank in rankings["bat"].items():
-                                                st.write(f"{format_type}: {rank}")
-                                        else:
-                                            st.write("No rankings")
-                                    
-                                    with col2:
-                                        st.markdown("**Bowling**")
-                                        if "bowl" in rankings:
-                                            for format_type, rank in rankings["bowl"].items():
-                                                st.write(f"{format_type}: {rank}")
-                                        else:
-                                            st.write("No rankings")
-                                    
-                                    with col3:
-                                        st.markdown("**All-Rounder**")
-                                        if "all" in rankings:
-                                            for format_type, rank in rankings["all"].items():
-                                                st.write(f"{format_type}: {rank}")
-                                        else:
-                                            st.write("No rankings")
-                        else:
-                            st.error("Could not fetch detailed player information")
+                    st.session_state['last_search_players'] = players
+                    st.session_state['last_search_term'] = search_name
+                    st.session_state['last_selected_idx'] = 0
                 else:
+                    st.session_state['last_search_players'] = None
                     st.warning("No results found. Try a different search term.")
+
+            # If there are stored players from last search, show them
+            players = st.session_state.get('last_search_players')
+            if players:
+                if len(players) == 0:
+                    st.warning(f"No players found for '{st.session_state.get('last_search_term', '')}'")
+                else:
+                    st.success(f"✅ Found {len(players)} player(s)")
+
+                    # Build display names
+                    player_names = [f"{p.get('name', 'Unknown')} ({p.get('teamName', p.get('team', 'N/A'))})" for p in players]
+
+                    # Selection with persistence
+                    selected_idx = st.selectbox("Select a player:", list(range(len(player_names))), index=st.session_state.get('last_selected_idx', 0), format_func=lambda x: player_names[x])
+                    st.session_state['last_selected_idx'] = selected_idx
+                    selected_player = players[selected_idx]
+
+                    # Get detailed info (use id if available)
+                    player_id = selected_player.get("id") or selected_player.get('playerId')
+                    player_details = get_player_details(player_id) if player_id else {}
+
+                    if player_details:
+                        # Display player profile
+                        st.markdown("---")
+                        col1, col2 = st.columns([1, 2])
+
+                        with col1:
+                            # Try to show player image from either source
+                            face_id = selected_player.get('faceImageId') or player_details.get('faceImageId')
+                            if face_id:
+                                img_url = f"https://www.cricbuzz.com/a/img/v1/152x152/i1/c{face_id}.jpg"
+                                st.image(img_url, width=150)
+                            else:
+                                st.info("No image available")
+
+                        with col2:
+                            # Prefer fields from player_details, fallback to selected_player
+                            display_name = player_details.get('name') or selected_player.get('name', 'Unknown')
+                            team = selected_player.get('teamName') or player_details.get('teams') or selected_player.get('team', 'N/A')
+                            dob = selected_player.get('dob') or player_details.get('dob') or player_details.get('birthDate')
+
+                            st.subheader(f"👤 {display_name}")
+                            st.caption(f"Team: {team}")
+                            if dob:
+                                st.write(f"📅 Born: {dob}")
+
+                        # Player details in expandable sections
+                        with st.expander("📋 Profile Information", expanded=True):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**Role:** {player_details.get('role', 'N/A')}")
+                                st.write(f"**Batting Style:** {player_details.get('bat', player_details.get('battingStyle', 'N/A'))}")
+                                st.write(f"**Bowling Style:** {player_details.get('bowl', player_details.get('bowlingStyle', 'N/A'))}")
+                            with col2:
+                                st.write(f"**Birth Place:** {player_details.get('birthPlace', player_details.get('birthPlace', 'N/A'))}")
+                                st.write(f"**Teams:** {player_details.get('teams', 'N/A')}")
+
+                        # ICC Rankings
+                        if "rankings" in player_details and player_details["rankings"]:
+                            with st.expander("🏆 ICC Rankings"):
+                                rankings = player_details["rankings"]
+                                col1, col2, col3 = st.columns(3)
+
+                                with col1:
+                                    st.markdown("**Batting**")
+                                    if "bat" in rankings:
+                                        for format_type, rank in rankings["bat"].items():
+                                            st.write(f"{format_type}: {rank}")
+                                    else:
+                                        st.write("No rankings")
+
+                                with col2:
+                                    st.markdown("**Bowling**")
+                                    if "bowl" in rankings:
+                                        for format_type, rank in rankings["bowl"].items():
+                                            st.write(f"{format_type}: {rank}")
+                                    else:
+                                        st.write("No rankings")
+
+                                with col3:
+                                    st.markdown("**All-Rounder**")
+                                    if "all" in rankings:
+                                        for format_type, rank in rankings["all"].items():
+                                            st.write(f"{format_type}: {rank}")
+                                    else:
+                                        st.write("No rankings")
+                    else:
+                        # If no detailed API info, still show basic info from search result
+                        st.markdown("---")
+                        st.subheader(selected_player.get('name', 'Unknown'))
+                        st.write("Basic details unavailable from API.")
         
         # ===== TAB 2: ALL PLAYERS FROM DATABASE =====
         with tab2:
