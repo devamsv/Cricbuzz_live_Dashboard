@@ -571,7 +571,7 @@ def app():
     st.title("🔍 SQL Analytics")
     st.markdown("---")
 
-    st.info("💡 Note: This page connects to a MySQL database to run the queries. Make sure your database is running and the connection details are correct.")
+
 
     load_dotenv()
     host = os.getenv("DB_HOST")
